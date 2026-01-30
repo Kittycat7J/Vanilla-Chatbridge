@@ -1,0 +1,19 @@
+{
+  "token": "MTI1kjehHwfesa.7fnejade38fndsjffsdfe.fefoidfs",
+  "webhook": "https://discord.com/api/webhooks/0123456789/5ehYnen_7nfdsakGdwem-8r3nfs_nejfnj-dfkFEfe4",
+  "chat_channel": "1460151378004676723",
+  "server_log_webhook": "https://discord.com/api/webhooks/9876543210/KDuwdns73_kkfdj44eiadn-fkja34sh_d54fkjashdf",
+  "admins": [
+    "123456789012345678",
+    "987654321098765432"
+  ],
+
+  "apiKey": "ptlc_Asdfghjklqwertyuiopzxcvbnm1234567890",
+  "apiUrl": "https://localhost:433",
+  "serverId": "d3aac109-e5e0-4331-b03e-3454f7e136dc",
+
+  "rcon_host": "localhost",
+  "rcon_port": 25575,
+  "rcon_password": "password123",
+  "log_file_path": "/home/user/logs/latest.log"
+}

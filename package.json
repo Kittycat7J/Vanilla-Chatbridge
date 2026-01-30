@@ -1,0 +1,22 @@
+{
+  "name": "configforproject",
+  "version": "0.0.1",
+  "description": "mineflayer bot",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --watch index.js"
+  },
+  "author": "almost",
+  "license": "ISC",
+  "dependencies": {
+    "canvas": "^3.2.1",
+    "discord.js": "^14.25.1",
+    "owoify-js": "^2.0.0",
+    "rcon": "^1.1.0"
+  },
+  "bin": "index.js",
+  "pkg": {
+    "scripts": [],
+    "assets": ["config.json"]
+  }
+}
