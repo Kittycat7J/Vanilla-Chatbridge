@@ -87,6 +87,7 @@ The bot supports the following slash commands in your Discord server:
 - `/restart` — Restarts the server. (Admin only)
 - `/owoify <mode>` — Sets chat owoification mode (`none`, `owo`, `uwu`, `uvu`).
 - `/command <cmd>` — Sends a console command to the server. (Admin only)
+- `/reinitialize` - reinitializes log listener and RCON connection (Admin only)
 
 ### Chat Relay
 

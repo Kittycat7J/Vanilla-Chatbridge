@@ -36,17 +36,14 @@ const client = new Client({
   ],
 });
 
-let latestPlayerStats = {
-  online: 0,
-  max: 0,
-  players: []
-};
 
 const WEBHOOK = new WebhookClient({ url: webhook });
 const serverLogWebhook = server_log_webhook ? new WebhookClient({ url: server_log_webhook }) : null;
 let rcon = null;
 let lastFileSize = 0;
 let lineBuffer = "";
+let logWatcher = null;
+let reinitInProgress = false;
 
 // Generic Pterodactyl API request function
 async function ptero(endpoint, method = "GET", body, raw = false) {
@@ -304,27 +301,56 @@ async function updateChannelWithServerStats() {
 }
 
 // Log all console output (for debugging commands)
+let skippingPlayerList = false;
+
 function logAllConsole(line) {
   if (typeof line !== "string") return;
-  // match to `[Server thread/ERROR]:.*/home/container/./crash-reports` and ping admin if found
   
+  // match to `[Server thread/ERROR]:.*/home/container/./crash-reports` and ping admin if found
   const crashMatch = line.match(/^\[\d{2}:\d{2}:\d{2}\]\s+\[Server thread\/ERROR\]:\s+.*(\/home\/container\/\.\/crash-reports.*)$/);
   if (crashMatch) {
     if (serverLogWebhook) {
       serverLogWebhook.send({
         username: "Crash Alert",
-        content:`<@&${adminRole}>`,
+        content: `<@&${adminRole}>`,
         avatarURL: `https://www.freeiconspng.com/download/40686`,
       });
     }
   }
+  
   // Extract the actual message part after timestamp and thread info
   const msgMatch = line.match(/^\[\d{2}:\d{2}:\d{2}\]\s+\[[^\]]+\/[A-Z]+\]:\s+(.*)$/);
-  // dont log the player count messages because they are spammy
-  const playerCountMatch = line.match(/^\[\d{2}:\d{2}:\d{2}\]\s+\[[^\]]+\/INFO\]:\s+There are \d+\/\d+ players online$/);
-  if (playerCountMatch) return;
-  // create a new webhook
-  if (server_log_webhook && msgMatch) {
+  
+  // Check for player count header line
+  const playerCountMatch = line.match(/^\[\d{2}:\d{2}:\d{2}\]\s+\[[^\]]+\/INFO\]:\s+There are \d+\/\d+ players online:/);
+  
+  // Check for empty line (end of player list)
+  
+  console.log("FULL LOG MSG:", line);
+  console.log("EXTRACTED MSG:", msgMatch ? msgMatch[1] : "N/A");
+  
+  // If we find a player count header, start skipping
+  if (playerCountMatch) {
+    skippingPlayerList = true;
+    console.log("START SKIPPING: Player count header found");
+    return;
+  }
+  
+  // If we're skipping player list and find an empty line, stop skipping
+  if (skippingPlayerList) {
+    skippingPlayerList = false;
+    console.log("STOP SKIPPING");
+    return;
+  }
+  
+  // Skip if we're in player list mode
+  if (skippingPlayerList) {
+    console.log("SKIPPING: Player list line");
+    return;
+  }
+  
+  // Check if the extracted message is not empty
+  if (server_log_webhook && msgMatch && msgMatch[1].trim() !== "") {
     serverLogWebhook.send({
       username: "Server Log",
       content: msgMatch[1],
@@ -541,28 +567,35 @@ function parseMessageParts(message, messages) {
 // Watch the latest.log file for changes
 function watchLogFile() {
   try {
+    if (logWatcher) {
+      logWatcher.close();
+      logWatcher = null;
+    }
+    // Always start from the end of the file, so no old lines are processed
+    try {
+      const stats = fs.statSync(log_file_path);
+      lastFileSize = stats.size;
+    } catch (e) {
+      lastFileSize = 0;
+    }
+    lineBuffer = "";
     console.log(`Watching ${log_file_path} for changes`);
-    watch(log_file_path, async (eventType, filename) => {
+    logWatcher = watch(log_file_path, async (eventType, filename) => {
       if (eventType !== "change") return;
-
       try {
         const content = fs.readFileSync(log_file_path, 'utf-8');
         const currentFileSize = content.length;
-
         if (currentFileSize > lastFileSize) {
           const newContent = content.slice(lastFileSize);
           lineBuffer += newContent;
-
           const lines = lineBuffer.split('\n');
           lineBuffer = lines.pop() || '';
-
           for (const line of lines) {
             if (line.trim()) {
               processLogLine(line);
               playerStatsManager("update", line);
             }
           }
-
           lastFileSize = currentFileSize;
         } else if (currentFileSize < lastFileSize) {
           lineBuffer = '';
@@ -576,6 +609,28 @@ function watchLogFile() {
     console.error(`Failed to watch log file: ${err}`);
     setTimeout(watchLogFile, 5000);
   }
+}
+
+async function reinitializeAll() {
+  if (reinitInProgress) return;
+  reinitInProgress = true;
+  // Reset log file state
+  lastFileSize = 0;
+  lineBuffer = "";
+  if (logWatcher) {
+    try { logWatcher.close(); } catch (e) {}
+    logWatcher = null;
+  }
+  // Disconnect RCON if connected
+  if (rcon) {
+    try { rcon.disconnect(); } catch (e) {}
+    rcon = null;
+  }
+  // Wait a moment to ensure cleanup
+  await new Promise(r => setTimeout(r, 500));
+  await initRcon();
+  watchLogFile();
+  reinitInProgress = false;
 }
 
 client.on("clientReady", async () => {
@@ -625,6 +680,10 @@ client.on("clientReady", async () => {
         .setName("command")
         .setDescription("Send a console command (admin only)")
         .addStringOption(option => option.setName("cmd").setDescription("Command to execute").setRequired(true)),
+
+      new SlashCommandBuilder()
+        .setName("reinitialize")
+        .setDescription("Restart the log listener and RCON connection (admin only)"),
     ].map(command => command.toJSON());
 
     const rest = new REST({ version: "10" }).setToken(token);
@@ -646,51 +705,49 @@ client.on("interactionCreate", async (interaction) => {
 
   try {
     if (commandName === "help") {
-      await interaction.reply({
-        content: "Available commands:\n/help - shows this message\n/players - list the players in the server\n/backup [force] [name] - makes a server backup (admin only)\n/start - starts the server (admin only)\n/stop - stops the server (admin only)\n/restart - restarts the server (admin only)\n/command <cmd> - sends a console command (admin only)\n/owoify <mode> - owoifies all messages",
-        ephemeral: true
+      await interaction.deferReply({ flags: 64 });
+      await interaction.editReply({
+        content: "Available commands:\n/help - shows this message\n/players - list the players in the server\n/backup [force] [name] - makes a server backup (admin only)\n/start - starts the server (admin only)\n/stop - stops the server (admin only)\n/restart - restarts the server (admin only)\n/command <cmd> - sends a console command (admin only)\n/owoify <mode> - owoifies all messages\n/reinitialize - reinitializes log listener and RCON connection (admin only)",
       });
     }
 
     if (commandName === "players") {
+      await interaction.deferReply({ flags: 64 });
       try {
         await sendConsoleCommandAPI("list");
         await new Promise(r => setTimeout(r, 1000));
         const stats = playerStatsManager("get");
         const listStr = stats.players.length > 0 ? stats.players.join(", ") : "None";
-        await interaction.reply({
+        await interaction.editReply({
           content: `There are ${stats.online}/${stats.max} players online` + (listStr !== "None" ? `:\n${listStr}` : ""),
-          ephemeral: true
         });
       } catch (err) {
         console.error("Players command error:", err);
-        await interaction.reply({
+        await interaction.editReply({
           content: "Failed to get player list.",
-          ephemeral: true
         });
       }
     }
 
     if (commandName === "backup") {
       if (!admins.includes(interaction.user.id)) {
-        return interaction.reply({ content: "This command is admin only.", ephemeral: true });
+        await interaction.deferReply({ flags: 64 });
+        await interaction.editReply({ content: "This command is admin only." });
+        return;
       }
-
+      await interaction.deferReply({ flags: 64 });
       const force = interaction.options.getBoolean("force") || false;
       const name = interaction.options.getString("name");
-
       try {
         const listRes = await ptero(`/servers/${serverId}/backups`, "GET");
         const existing = listRes.data || [];
         console.log(`Existing backups: ${existing.length}`);
         if (existing.length >= 3) {
           if (!force) {
-            return interaction.reply({
-              content: `Maximum number of backups reached (3). Use force option to delete the oldest and create a new one.`,
-              ephemeral: true
+            return interaction.editReply({
+              content: `Maximum number of backups reached (3). Use force option to delete the oldest and create a new one.`
             });
           }
-
           existing.sort((a, b) => new Date(a.attributes.created_at) - new Date(b.attributes.created_at));
           console.log("Deleting oldest backup:", existing[0]);
           const oldest = existing[0];
@@ -698,91 +755,110 @@ client.on("interactionCreate", async (interaction) => {
             await ptero(`/servers/${serverId}/backups/${oldest.attributes.uuid}`, "DELETE");
           }
         }
-
         const backupName = name || "discord_backup";
         await ptero(`/servers/${serverId}/backups`, "POST", { name: backupName });
-        await interaction.reply({
-          content: `Backup started! (force: ${force})`,
-          ephemeral: true
+        await interaction.editReply({
+          content: `Backup started! (force: ${force})`
         });
       } catch (err) {
         console.error("Backup command error:", err);
-        await interaction.reply({
-          content: "Failed to handle backup command.",
-          ephemeral: true
+        await interaction.editReply({
+          content: "Failed to handle backup command."
         });
       }
     }
 
     if (commandName === "start") {
       if (!admins.includes(interaction.user.id)) {
-        return interaction.reply({ content: "This command is admin only.", ephemeral: true });
+        await interaction.deferReply({ flags: 64 });
+        await interaction.editReply({ content: "This command is admin only." });
+        return;
       }
+      await interaction.deferReply({ flags: 64 });
       await power("start");
-      await interaction.reply({
-        content: "Server starting...",
-        ephemeral: true
+      await interaction.editReply({
+        content: "Server starting..."
       });
     }
 
     if (commandName === "stop") {
       if (!admins.includes(interaction.user.id)) {
-        return interaction.reply({ content: "This command is admin only.", ephemeral: true });
+        await interaction.deferReply({ flags: 64 });
+        await interaction.editReply({ content: "This command is admin only." });
+        return;
       }
+      await interaction.deferReply({ flags: 64 });
       await power("stop");
-      await interaction.reply({
-        content: "Server stopping...",
-        ephemeral: true
+      await interaction.editReply({
+        content: "Server stopping..."
       });
     }
 
     if (commandName === "restart") {
       if (!admins.includes(interaction.user.id)) {
-        return interaction.reply({ content: "This command is admin only.", ephemeral: true });
+        await interaction.deferReply({ flags: 64 });
+        await interaction.editReply({ content: "This command is admin only." });
+        return;
       }
+      await interaction.deferReply({ flags: 64 });
       await power("restart");
-      await interaction.reply({
-        content: "Server restarting...",
-        ephemeral: true
+      await interaction.editReply({
+        content: "Server restarting..."
       });
+    }
+
+    if (commandName === "reinitialize") {
+      if (!admins.includes(interaction.user.id)) {
+        await interaction.deferReply({ flags: 64 });
+        await interaction.editReply({ content: "This command is admin only." });
+        return;
+      }
+      await interaction.deferReply({ flags: 64 });
+      await reinitializeAll();
+      await interaction.editReply({ content: "Reinitialized log listener and RCON connection." });
+      return;
     }
 
     if (commandName === "owoify") {
       const mode = interaction.options.getString("mode");
       if (mode === "none" || mode === "uwu" || mode === "uvu" || mode === "owo") {
         owoState = mode;
-        await interaction.reply({
-          content: `Owoify mode set to: ${mode}`,
-          ephemeral: true
+        await interaction.deferReply({ flags: 64 });
+        await interaction.editReply({
+          content: `Owoify mode set to: ${mode}`
         });
       }
     }
 
     if (commandName === "command") {
       if (!admins.includes(interaction.user.id)) {
-        return interaction.reply({ content: "This command is admin only.", ephemeral: true });
+        await interaction.deferReply({ flags: 64 });
+        await interaction.editReply({ content: "This command is admin only." });
+        return;
       }
       const cmd = interaction.options.getString("cmd");
+      await interaction.deferReply({ flags: 64 });
       try {
         await sendConsoleCommandAPI(cmd);
-        await interaction.reply({
-          content: `Command executed: ${cmd}`,
-          ephemeral: true
+        await interaction.editReply({
+          content: `Command executed: ${cmd}`
         });
       } catch (err) {
         console.error("Command error:", err);
-        await interaction.reply({
-          content: "Failed to execute command.",
-          ephemeral: true
+        await interaction.editReply({
+          content: "Failed to execute command."
         });
       }
     }
   } catch (err) {
     console.error("Command error:", err);
-    await interaction.reply({
-      content: "An error occurred while executing the command.",
-      ephemeral: true
-    });
+    try {
+      await interaction.editReply({
+        content: "An error occurred while executing the command."
+      });
+    } catch (e) {
+      // If editReply fails, ignore (already acknowledged)
+    }
   }
 });
 
