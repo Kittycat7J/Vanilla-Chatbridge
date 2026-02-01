@@ -168,10 +168,10 @@ function filterConsole(line) {
   // custom emojis
   // set these in your bot settings and paste the markdown here
   // idk who made these emojis so no credits
-  const joinEmoji  = "<:join:1466577873010692106> ";
-  const leaveEmoji = "<:leave:1466577874038423797> ";
-  const deathEmoji = "<:death:1466577871714910312> ";
-  const advancementEmoji = "<:achievement:1466577870510886999> ";
+  const joinEmoji  = "<:join:1466230485477757090> ";
+  const leaveEmoji = "<:leave:1466230409875685600> ";
+  const deathEmoji = "<:death:1466230459771130032> ";
+  const advancementEmoji = "<:achievement:1466576982858006691> ";
   
 
   const match = line.match(CHAT_REGEX);
@@ -650,18 +650,18 @@ client.on("clientReady", async () => {
         .setDescription("List players on the server"),
       new SlashCommandBuilder()
         .setName("backup")
-        .setDescription("Create a server backup")
+        .setDescription("Create a server backup (admin only)")
         .addBooleanOption(option => option.setName("force").setDescription("Force backup (deletes oldest if limit reached)").setRequired(false))
         .addStringOption(option => option.setName("name").setDescription("Backup name").setRequired(false)),
       new SlashCommandBuilder()
         .setName("start")
-        .setDescription("Start the server"),
+        .setDescription("Start the server (admin only)"),
       new SlashCommandBuilder()
         .setName("stop")
-        .setDescription("Stop the server"),
+        .setDescription("Stop the server (admin only)"),
       new SlashCommandBuilder()
         .setName("restart")
-        .setDescription("Restart the server"),
+        .setDescription("Restart the server (admin only)"),
       new SlashCommandBuilder()
         .setName("owoify")
         .setDescription("Set chat owoification")
