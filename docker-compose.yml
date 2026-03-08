@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # Minecraft Server (using Java image)
+  minecraft:
+    image: itzg/minecraft-server:latest
+    container_name: minecraft-server
+    ports:
+      - "25565:25565"
+      - "25575:25575"  # RCON port
+    environment:
+      EULA: "TRUE"
+      VERSION: "1.20.1"
+      TYPE: "PAPER"
+      ENABLE_RCON: "true"
+      RCON_PORT: "25575"
+      RCON_PASSWORD: "minecraft-rcon-password"
+      JVM_OPTS: "-Xmx2G -Xms1G"
+    volumes:
+      - ./minecraft-data:/data
+    networks:
+      - chatbridge-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "localhost:25565"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Chatbridge Service
+  chatbridge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chatbridge-bot
+    depends_on:
+      minecraft:
+        condition: service_healthy
+    environment:
+      # Discord Bot Configuration
+      DISCORD_TOKEN: "${DISCORD_TOKEN:?Error: DISCORD_TOKEN not set in .env}"
+      DISCORD_WEBHOOK: "${DISCORD_WEBHOOK:?Error: DISCORD_WEBHOOK not set in .env}"
+      DISCORD_CHAT_CHANNEL: "${DISCORD_CHAT_CHANNEL:?Error: DISCORD_CHAT_CHANNEL not set in .env}"
+      DISCORD_LOG_WEBHOOK: "${DISCORD_LOG_WEBHOOK}"
+      DISCORD_ADMINS: "${DISCORD_ADMINS:?Error: DISCORD_ADMINS not set in .env}"
+      DISCORD_ADMIN_ROLE: "${DISCORD_ADMIN_ROLE:?Error: DISCORD_ADMIN_ROLE not set in .env}"
+      
+      # Pterodactyl API Configuration
+      PTERODACTYL_API_KEY: "${PTERODACTYL_API_KEY:?Error: PTERODACTYL_API_KEY not set in .env}"
+      PTERODACTYL_API_URL: "${PTERODACTYL_API_URL:-http://localhost}"
+      PTERODACTYL_SERVER_ID: "${PTERODACTYL_SERVER_ID:?Error: PTERODACTYL_SERVER_ID not set in .env}"
+      
+      # RCON Configuration (bridge to Minecraft)
+      RCON_HOST: "minecraft"  # Service name in docker-compose
+      RCON_PORT: "25575"
+      RCON_PASSWORD: "minecraft-rcon-password"  # Must match Minecraft server
+      LOG_FILE_PATH: "logs/latest.log"
+      
+      # Optional
+      PORT: "25568"
+      STARTUP_CMD: "node index.js"
+    
+    volumes:
+      - .:/home/container
+    networks:
+      - chatbridge-network
+    restart: unless-stopped
+
+networks:
+  chatbridge-network:
+    driver: bridge
+
+volumes:
+  minecraft-data:
+    driver: local

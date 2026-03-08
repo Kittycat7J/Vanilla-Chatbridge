@@ -1,0 +1,150 @@
+{
+  "meta": {"version":"PTDL_v2","update_url":null},
+  "exported_at":"2026-03-08T00:00:00-00:00",
+  "name":"Discord - Minecraft Chat Bridge",
+  "author":"chatbridge@example.com",
+  "description":"Node.js Discord-Minecraft chat bridge with RCON and webhook support.",
+  "docker_images":{"NodeJS 18":"ghcr.io/pterodactyl/yolks:nodejs_18"},
+  "variables":[
+    {
+      "name": "Discord Bot Token",
+      "description": "Your Discord bot token from the Discord Developer Portal",
+      "env_variable": "DISCORD_TOKEN",
+      "default_value": "",
+      "user_viewable": false,
+      "user_editable": true,
+      "rules": "required|string"
+    },
+    {
+      "name": "Discord Webhook URL",
+      "description": "Webhook URL to relay Minecraft chat to Discord",
+      "env_variable": "DISCORD_WEBHOOK",
+      "default_value": "",
+      "user_viewable": false,
+      "user_editable": true,
+      "rules": "required|string"
+    },
+    {
+      "name": "Discord Chat Channel ID",
+      "description": "The Discord channel ID where Minecraft chat will be relayed",
+      "env_variable": "DISCORD_CHAT_CHANNEL",
+      "default_value": "",
+      "user_viewable": false,
+      "user_editable": true,
+      "rules": "required|string"
+    },
+    {
+      "name": "Discord Log Webhook URL",
+      "description": "Optional webhook URL for server logs and crash alerts",
+      "env_variable": "DISCORD_LOG_WEBHOOK",
+      "default_value": "",
+      "user_viewable": false,
+      "user_editable": true,
+      "rules": "nullable|string"
+    },
+    {
+      "name": "Discord Admin IDs",
+      "description": "Comma-separated list of Discord user IDs with admin permissions",
+      "env_variable": "DISCORD_ADMINS",
+      "default_value": "",
+      "user_viewable": false,
+      "user_editable": true,
+      "rules": "required|string"
+    },
+    {
+      "name": "Discord Admin Role ID",
+      "description": "Discord role ID for admin notifications (e.g., crash alerts)",
+      "env_variable": "DISCORD_ADMIN_ROLE",
+      "default_value": "",
+      "user_viewable": false,
+      "user_editable": true,
+      "rules": "required|string"
+    },
+    {
+      "name": "Pterodactyl API Key",
+      "description": "API key for authenticating with the Pterodactyl Panel",
+      "env_variable": "PTERODACTYL_API_KEY",
+      "default_value": "",
+      "user_viewable": false,
+      "user_editable": true,
+      "rules": "required|string"
+    },
+    {
+      "name": "Pterodactyl API URL",
+      "description": "URL of the Pterodactyl Panel (e.g., http://localhost or https://panel.example.com)",
+      "env_variable": "PTERODACTYL_API_URL",
+      "default_value": "http://localhost",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string"
+    },
+    {
+      "name": "Pterodactyl Server ID",
+      "description": "UUID of the Minecraft server in Pterodactyl",
+      "env_variable": "PTERODACTYL_SERVER_ID",
+      "default_value": "",
+      "user_viewable": false,
+      "user_editable": true,
+      "rules": "required|string"
+    },
+    {
+      "name": "RCON Host",
+      "description": "Hostname or IP address of the Minecraft server for RCON",
+      "env_variable": "RCON_HOST",
+      "default_value": "localhost",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string"
+    },
+    {
+      "name": "RCON Port",
+      "description": "RCON port of the Minecraft server",
+      "env_variable": "RCON_PORT",
+      "default_value": "25575",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|numeric"
+    },
+    {
+      "name": "RCON Password",
+      "description": "RCON password for the Minecraft server",
+      "env_variable": "RCON_PASSWORD",
+      "default_value": "",
+      "user_viewable": false,
+      "user_editable": true,
+      "rules": "required|string"
+    },
+    {
+      "name": "Log File Path",
+      "description": "Path to Minecraft server log file (relative to server root)",
+      "env_variable": "LOG_FILE_PATH",
+      "default_value": "logs/latest.log",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string"
+    },
+    {
+      "name": "Container Port",
+      "description": "Port for internal bot communication (not exposed externally)",
+      "env_variable": "PORT",
+      "default_value": "25568",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|numeric"
+    }
+  ],
+  "startup":"node index.js",
+  "config":{
+    "files":"{}",
+    "startup":"{\"done\":[\"logged in\"],\"userInteraction\":[]}",
+    "logs":"{\"custom\":false,\"location\":\"logs/latest.log\"}",
+    "stop":"stop"
+  },
+  "scripts":{
+    "installation":{
+      "script":"#!/bin/bash\ncd /mnt/server\nnpm install --production\necho 'Installation complete!'",
+      "container":"ghcr.io/pterodactyl/installers:debian",
+      "entrypoint":"bash"
+    }
+  }
+}

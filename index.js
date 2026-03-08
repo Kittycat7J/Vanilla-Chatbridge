@@ -11,21 +11,43 @@ const {
   Routes,
 } = require("discord.js");
 
-const {
-  token,
-  chat_channel,
-  server_log_webhook,
-  webhook,
-  admins,
-  adminRole,
-  apiKey,
-  apiUrl,
-  serverId,
-  rcon_host,
-  rcon_port,
-  rcon_password,
-  log_file_path,
-} = require("./config.json");
+// Load configuration from environment variables
+const token = process.env.DISCORD_TOKEN;
+const chat_channel = process.env.DISCORD_CHAT_CHANNEL;
+const server_log_webhook = process.env.DISCORD_LOG_WEBHOOK;
+const webhook = process.env.DISCORD_WEBHOOK;
+const admins = process.env.DISCORD_ADMINS ? process.env.DISCORD_ADMINS.split(',') : [];
+const adminRole = process.env.DISCORD_ADMIN_ROLE;
+const apiKey = process.env.PTERODACTYL_API_KEY;
+const apiUrl = process.env.PTERODACTYL_API_URL || 'http://localhost';
+const serverId = process.env.PTERODACTYL_SERVER_ID;
+const rcon_host = process.env.RCON_HOST || 'localhost';
+const rcon_port = parseInt(process.env.RCON_PORT) || 25575;
+const rcon_password = process.env.RCON_PASSWORD;
+const log_file_path = process.env.LOG_FILE_PATH || 'logs/latest.log';
+
+// Validate required environment variables
+const requiredVars = {
+  DISCORD_TOKEN: token,
+  DISCORD_WEBHOOK: webhook,
+  DISCORD_CHAT_CHANNEL: chat_channel,
+  DISCORD_ADMIN_ROLE: adminRole,
+  PTERODACTYL_API_KEY: apiKey,
+  PTERODACTYL_SERVER_ID: serverId,
+  RCON_PASSWORD: rcon_password,
+};
+
+const missingVars = Object.entries(requiredVars)
+  .filter(([key, value]) => !value)
+  .map(([key]) => key);
+
+if (missingVars.length > 0) {
+  console.error('❌ Missing required environment variables:');
+  missingVars.forEach(v => console.error(`   - ${v}`));
+  process.exit(1);
+}
+
+console.log('✓ All required environment variables are set');
 
 let owoState = "none";
 const client = new Client({
@@ -219,6 +241,38 @@ const playerStatsManager = (() => {
 
   const UPDATE_INTERVAL_MS = 150_000; // 2.5 minutes
 
+  function processPending() {
+    if (!pendingLine) return;
+
+    const msgMatch = pendingLine.match(/^\[[^\]]+]\s+\[[^\]]+]:\s+(.*)$/);
+    const msg = msgMatch ? msgMatch[1] : pendingLine;
+
+    // Player count
+    const countMatch = msg.match(/There are (\d+)\/(\d+) players online/i);
+    if (countMatch) {
+      latestPlayerStats.online = parseInt(countMatch[1], 10);
+      latestPlayerStats.max = parseInt(countMatch[2], 10);
+      latestPlayerStats.players = [];
+      pendingLine = null;
+      return;
+    }
+
+    // Collect names
+    if (latestPlayerStats.online > 0) {
+      const parts = msg.trim().split(",").map(p => p.trim());
+
+      for (const name of parts) {
+        if (/^[A-Za-z0-9_]{3,16}$/.test(name)) {
+          if (!latestPlayerStats.players.includes(name)) {
+            latestPlayerStats.players.push(name);
+          }
+        }
+      }
+    }
+
+    pendingLine = null;
+  }
+
   return function playerStatsManager(action, line) {
     if (action === "update") {
       if (!line || typeof line !== "string") return;
@@ -226,48 +280,23 @@ const playerStatsManager = (() => {
       // Always overwrite with latest line
       pendingLine = line;
 
-      // Start the interval only once
+      // Start interval once
       if (!timerStarted) {
         timerStarted = true;
 
         setInterval(() => {
-          if (!pendingLine) return;
-
-          const msgMatch = pendingLine.match(/^\[[^\]]+]\s+\[[^\]]+]:\s+(.*)$/);
-          const msg = msgMatch ? msgMatch[1] : pendingLine;
-
-          // Player count
-          const countMatch = msg.match(/There are (\d+)\/(\d+) players online/i);
-          if (countMatch) {
-            latestPlayerStats.online = parseInt(countMatch[1], 10);
-            latestPlayerStats.max = parseInt(countMatch[2], 10);
-            latestPlayerStats.players = [];
-            pendingLine = null;
-            return;
-          }
-
-          // Collect names
-          if (latestPlayerStats.online > 0) {
-            const parts = msg.trim().split(",").map(p => p.trim());
-
-            for (const name of parts) {
-              if (/^[A-Za-z0-9_]{3,16}$/.test(name)) {
-                if (!latestPlayerStats.players.includes(name)) {
-                  latestPlayerStats.players.push(name);
-                }
-              }
-            }
-          }
-
-          pendingLine = null;
+          processPending();
         }, UPDATE_INTERVAL_MS);
       }
 
     } else if (action === "get") {
+      // Force immediate processing before returning
+      processPending();
       return { ...latestPlayerStats };
     }
   };
 })();
+
 
 
 
@@ -638,7 +667,7 @@ client.on("clientReady", async () => {
   try {
     await initRcon();
     watchLogFile();
-    setInterval(updateChannelWithServerStats, 300000);
+    setInterval(updateChannelWithServerStats, 600000);
 
     // Register slash commands
     const commands = [
