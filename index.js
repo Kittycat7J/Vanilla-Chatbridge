@@ -21,7 +21,7 @@ const adminRole = process.env.DISCORD_ADMIN_ROLE;
 const apiKey = process.env.PTERODACTYL_API_KEY;
 const apiUrl = process.env.PTERODACTYL_API_URL || 'http://localhost';
 const serverId = process.env.PTERODACTYL_SERVER_ID;
-const rcon_host = process.env.RCON_HOST || 'localhost';
+const rcon_host = process.env.PTERODACTYL_SERVER_ID || 'localhost';
 const rcon_port = parseInt(process.env.RCON_PORT) || 25575;
 const rcon_password = process.env.RCON_PASSWORD;
 const log_file_path = process.env.LOG_FILE_PATH || 'logs/latest.log';
@@ -80,7 +80,7 @@ async function ptero(endpoint, method = "GET", body, raw = false) {
     },
     body: body ? JSON.stringify(body) : undefined,
   });
-  
+
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`API failed: ${res.status} ${text}`);
