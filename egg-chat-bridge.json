@@ -80,7 +80,7 @@
             "default_value": "",
             "user_viewable": false,
             "user_editable": true,
-            "rules": "required|string",
+            "rules": "nullable|string",
             "field_type": "text"
         },
         {
@@ -90,7 +90,7 @@
             "default_value": "",
             "user_viewable": false,
             "user_editable": true,
-            "rules": "required|string",
+            "rules": "nullable|string",
             "field_type": "text"
         },
         {
@@ -119,16 +119,6 @@
             "env_variable": "PTERODACTYL_SERVER_ID",
             "default_value": "",
             "user_viewable": false,
-            "user_editable": true,
-            "rules": "required|string",
-            "field_type": "text"
-        },
-        {
-            "name": "RCON Host",
-            "description": "Hostname or IP address of the Minecraft server for RCON",
-            "env_variable": "RCON_HOST",
-            "default_value": "localhost",
-            "user_viewable": true,
             "user_editable": true,
             "rules": "required|string",
             "field_type": "text"
