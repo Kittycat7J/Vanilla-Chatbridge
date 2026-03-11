@@ -12,3 +12,4 @@ echo ":/home/container$ ${MODIFIED_STARTUP}"
 
 # Run the Application
 ${MODIFIED_STARTUP}
+# node index.js
