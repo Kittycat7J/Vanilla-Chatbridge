@@ -4,6 +4,8 @@ cd /home/container
 # Output Node version
 node --version
 
+# Create config from environment variables or use existing config.json
+
 
 # Replace Startup Variables
 MODIFIED_STARTUP=`eval echo $(echo ${STARTUP} | sed -e 's/{{/${/g' -e 's/}}/}/g')`
