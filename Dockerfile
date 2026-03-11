@@ -5,10 +5,11 @@
 # ----------------------------------
 FROM node:18-alpine
 
-RUN apk add --no-cache --update curl ca-certificates openssl git bash tini \
+RUN apk add --no-cache --update curl ca-certificates openssl git bash tini python3 make g++ \
     && adduser --disabled-password --home /home/container container
 
 WORKDIR /home/container
+
 
 # Copy application files
 COPY --chown=container:container . .
@@ -19,5 +20,4 @@ RUN npm install --production
 USER container
 ENV USER=container HOME=/home/container
 
-ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["node", "index.js"]
+CMD ["/bin/bash", "entrypoint.sh"]
