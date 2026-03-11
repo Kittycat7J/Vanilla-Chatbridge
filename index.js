@@ -24,7 +24,7 @@ const serverId = process.env.PTERODACTYL_SERVER_ID;
 const rcon_host = process.env.RCON_HOST || 'localhost';
 const rcon_port = parseInt(process.env.RCON_PORT) || 25575;
 const rcon_password = process.env.RCON_PASSWORD;
-const log_file_path = '/mnt/minecraft/' + process.env.PTERODACTYL_SERVER_ID + '/' + (process.env.LOG_FILE_PATH || 'logs/latest.log');
+const log_file_path = process.env.LOG_FILE_PATH || 'logs/latest.log';
 
 // Validate required environment variables
 const requiredVars = {
@@ -80,7 +80,7 @@ async function ptero(endpoint, method = "GET", body, raw = false) {
     },
     body: body ? JSON.stringify(body) : undefined,
   });
-
+  
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`API failed: ${res.status} ${text}`);
